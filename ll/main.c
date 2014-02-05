@@ -20,7 +20,12 @@
 #include <malloc.h>
 #include <memory.h>
 #include <pthread.h>
-#include <stdint.h>
+
+#ifdef __i386__
+typedef unsigned int ptr;
+#else
+typedef unsigned long long ptr;
+#endif
 
 typedef struct str
 {
@@ -34,6 +39,7 @@ typedef struct str
 volatile static struct str *list;
 static pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
 
+
 #define ALLOC( tmp, type )\
 	tmp = malloc( sizeof( type ) );\
 	memset( tmp, 0, sizeof( type ) );
@@ -45,23 +51,22 @@ static pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
 	printf( "total: %d\n", i );
 
 #define cmpxchg( ptr, _old, _new, fail_label ) { \
-	volatile uint32_t *__ptr = (volatile uint32_t *)(ptr);   \
-  	asm goto( "lock; cmpxchg %1,%0 \t\n"           \
-    	"jnz %l[" #fail_label "] \t\n"               \
-    	: /* empty */                                \
-    	: "m" (*__ptr), "r" (_new), "a" (_old)       \
-    	: "memory", "cc"                             \
-    	: fail_label );                              \
+        volatile unsigned int *__ptr = (volatile unsigned int *)(ptr);   \
+        asm goto( "lock; cmpxchg %1,%0 \t\n"           \
+        "jnz %l[" #fail_label "] \t\n"               \
+        : : "m" (*__ptr), "r" (_new), "a" (_old)       \
+        : "memory", "cc"                             \
+        : fail_label );                              \
 }
 
-void addItem( struct str *i ) {
-        volatile struct str *oldHead;
-
+static inline void LL_ADD_AT( void **list, void *node ) {
+        volatile void *oldHead;
 again:
-        oldHead = list;
-        i->next = oldHead;
-        cmpxchg( &list, oldHead, i, again );
+        oldHead = *(void **)list;
+        *((ptr *)node) = (ptr)oldHead;
+        cmpxchg( list, oldHead, node, again );
 }
+
 
 void *test( void *data )
 {
@@ -78,7 +83,7 @@ void *test( void *data )
 		list = tmp;
 		pthread_mutex_unlock( &mut );
 #elif T_AT
-		addItem( tmp );
+		LL_ADD_AT( (void *)&list, tmp );
 #else
 		tmp->next = list;
 		list = tmp;
