@@ -54,6 +54,7 @@ STRFLAGS+=$(DS)FMF_LIBSTR_x86_32_memcmp
 #STRCHR=$(DS)FMF_LIBSTR_x86_32_strchr
 
 all:
+	mkdir -p ./lib/
 	mkdir -p ./build/
 	nasm -f elf32 strlen.asm -o ./build/strlen.o
 	nasm -f elf32 memcpy_prefetch.asm -o ./build/memcpy_prefetch.o
